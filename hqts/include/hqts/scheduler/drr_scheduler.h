@@ -2,12 +2,14 @@
 #define HQTS_SCHEDULER_DRR_SCHEDULER_H_
 
 #include "hqts/scheduler/scheduler_interface.h"
-#include "hqts/scheduler/queue_types.h" // For PacketQueue
+// #include "hqts/scheduler/queue_types.h" // No longer directly used for PacketQueue
+#include "hqts/scheduler/aqm_queue.h"     // For RedAqmQueue and RedAqmParameters
 #include "hqts/core/flow_context.h"     // For core::QueueId
 
 #include <vector>
 #include <map>
 #include <stdexcept> // For std::out_of_range, std::invalid_argument, std::runtime_error, std::logic_error
+#include <memory>    // For std::unique_ptr if that was chosen
 #include <string>    // Potentially for error messages
 
 namespace hqts {
@@ -30,8 +32,11 @@ public:
     struct QueueConfig {
         core::QueueId id;        // User-defined ID for the queue
         uint32_t quantum_bytes; // Quantum in bytes for this queue (must be > 0)
+        RedAqmParameters aqm_params; // AQM parameters for this queue
 
-        QueueConfig(core::QueueId q_id, uint32_t q_bytes) : id(q_id), quantum_bytes(q_bytes) {}
+        // Updated constructor
+        QueueConfig(core::QueueId q_id, uint32_t q_bytes, RedAqmParameters aqm_p)
+            : id(q_id), quantum_bytes(q_bytes), aqm_params(std::move(aqm_p)) {}
     };
 
     /**
@@ -89,13 +94,14 @@ public:
 
 private:
     struct InternalQueueState {
-        PacketQueue packet_queue;
+        RedAqmQueue packet_queue; // Changed type
         uint32_t quantum_bytes;
-        int64_t deficit_counter; // Can be negative if a large packet borrows from future quantum
+        int64_t deficit_counter;
         core::QueueId external_id;
 
-        InternalQueueState(core::QueueId ext_id, uint32_t q_bytes)
-            : quantum_bytes(q_bytes), deficit_counter(0), external_id(ext_id) {}
+        // Updated constructor
+        InternalQueueState(core::QueueId ext_id, uint32_t q_bytes, const RedAqmParameters& aqm_p)
+            : packet_queue(aqm_p), quantum_bytes(q_bytes), deficit_counter(0), external_id(ext_id) {}
     };
 
     std::vector<InternalQueueState> queues_;
