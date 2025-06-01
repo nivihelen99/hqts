@@ -10,6 +10,7 @@
 #include <chrono>    // For time calculations if needed (e.g. real time for virtual clock updates)
 #include <stdexcept> // For std::out_of_range, std::invalid_argument, std::logic_error
 #include <string>    // Potentially for error messages
+#include <queue>     // For std::priority_queue
 
 namespace hqts {
 namespace scheduler {
@@ -121,6 +122,24 @@ private:
     // void update_flow_eligibility(HfscFlowState& flow_state, const PacketDescriptor& packet);
     // void update_virtual_times(HfscFlowState& flow_state, const PacketDescriptor& packet);
     // HfscFlowState* select_next_flow_to_service();
+
+    // Nested struct for managing eligible flows in the priority queue
+    struct EligibleFlow {
+        uint64_t virtual_finish_time; // The time used for ordering in the eligible set
+        core::FlowId flow_id;
+
+        // Comparator for min-heap (smallest virtual_finish_time has highest priority)
+        // std::priority_queue is a max-heap by default, so std::greater makes it a min-heap.
+        bool operator>(const EligibleFlow& other) const {
+            if (virtual_finish_time != other.virtual_finish_time) {
+                return virtual_finish_time > other.virtual_finish_time;
+            }
+            // Tie-breaking for stability or consistent ordering if VFTs are equal
+            return flow_id > other.flow_id;
+        }
+    };
+
+    std::priority_queue<EligibleFlow, std::vector<EligibleFlow>, std::greater<EligibleFlow>> eligible_set_;
 };
 
 } // namespace scheduler
