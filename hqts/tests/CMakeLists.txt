@@ -29,6 +29,8 @@ add_executable(run_hqts_tests
     unit/dataplane/test_flow_table.cpp
     unit/scheduler/test_strict_priority_scheduler.cpp # Added
     unit/scheduler/test_wrr_scheduler.cpp             # Added
+    unit/scheduler/test_drr_scheduler.cpp             # Added
+    unit/scheduler/test_hfsc_scheduler.cpp            # Added
     # Add new test_*.cpp files here as they are created
 )
 
