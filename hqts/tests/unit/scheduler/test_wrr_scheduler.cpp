@@ -71,9 +71,8 @@ TEST(WrrSchedulerTest, ConstructorValidation) {
         {static_cast<core::QueueId>(2), 20, permissive_aqm}
     };
     ASSERT_NO_THROW(WrrScheduler scheduler(valid_configs));
-    DrrScheduler scheduler(valid_configs); // Corrected type to DrrScheduler for consistency with test name, should be WrrScheduler
-    // Reverting to WrrScheduler as this is a WrrSchedulerTest
-    WrrScheduler wrr_scheduler(valid_configs);
+    // DrrScheduler scheduler(valid_configs); // This was the typo
+    WrrScheduler wrr_scheduler(valid_configs); // This is the correct instantiation
     ASSERT_EQ(wrr_scheduler.get_num_queues(), 2);
     ASSERT_TRUE(wrr_scheduler.is_empty());
 }
