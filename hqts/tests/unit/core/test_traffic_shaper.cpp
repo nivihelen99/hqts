@@ -146,9 +146,12 @@ TEST_F(TrafficShaperTest, ProcessPacketRedAndAllow) {
     dataplane::FiveTuple tuple_gyr(1,2,3,4,6);
     set_policy_for_flow(tuple_gyr, POLICY_ID_GREEN_YELLOW_RED); // Policy 1: drop_on_red = false
 
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
+    scheduler::PacketDescriptor p_allow1 = createShaperTestPacket(0, 1000);
+    ASSERT_TRUE(shaper_->process_packet(p_allow1, tuple_gyr));
+    scheduler::PacketDescriptor p_allow2 = createShaperTestPacket(0, 1000);
+    ASSERT_TRUE(shaper_->process_packet(p_allow2, tuple_gyr));
+    scheduler::PacketDescriptor p_allow3 = createShaperTestPacket(0, 1000);
+    ASSERT_TRUE(shaper_->process_packet(p_allow3, tuple_gyr));
 
     scheduler::PacketDescriptor packet4 = createShaperTestPacket(0, 500);
     bool should_enqueue_p4 = shaper_->process_packet(packet4, tuple_gyr);
@@ -162,8 +165,10 @@ TEST_F(TrafficShaperTest, ProcessPacketRedAndDrop) {
     dataplane::FiveTuple tuple_drop_r(3,4,5,6,6);
     set_policy_for_flow(tuple_drop_r, POLICY_ID_DROP_RED); // Policy 2: drop_on_red = true
 
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 800), tuple_drop_r));
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 800), tuple_drop_r));
+    scheduler::PacketDescriptor p_drop1 = createShaperTestPacket(0, 800);
+    ASSERT_TRUE(shaper_->process_packet(p_drop1, tuple_drop_r));
+    scheduler::PacketDescriptor p_drop2 = createShaperTestPacket(0, 800);
+    ASSERT_TRUE(shaper_->process_packet(p_drop2, tuple_drop_r));
 
     scheduler::PacketDescriptor packet3 = createShaperTestPacket(0, 800);
     bool should_enqueue_p3 = shaper_->process_packet(packet3, tuple_drop_r);
