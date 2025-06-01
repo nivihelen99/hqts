@@ -1,0 +1,5 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for project documentation.
+# This directory will contain user guides, API documentation (e.g., Doxygen output),
+# design documents, and other relevant documentation.
+# The existing docs/requirement.md at the project root is separate from this.

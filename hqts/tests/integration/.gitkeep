@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for integration tests.
+# These tests will verify interactions between different components of HQTS.
+# Example: test_policy_and_scheduler_integration.cpp, test_api_to_core.cpp

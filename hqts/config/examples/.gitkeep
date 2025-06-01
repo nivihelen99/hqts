@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for example configuration files for HQTS.
+# These examples would show users how to set up various features and scenarios.
+# Example: basic_config.json, advanced_qos_policy.yaml

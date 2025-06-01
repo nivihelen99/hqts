@@ -1,0 +1,3 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for JSON schemas or other validation schemas for HQTS configuration files.
+# Example: config_schema_v1.json, policy_schema.json

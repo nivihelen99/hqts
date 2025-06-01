@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for unit tests for the data plane components.
+# Test files should correspond to source files in src/dataplane/.
+# Example: test_packet_parser.cpp, test_flow_table.cpp

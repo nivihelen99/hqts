@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for unit tests for the core components.
+# Test files should correspond to source files in src/core/ and headers in include/hqts/core/.
+# Example: test_hqts_request.cpp, test_hqts_context.cpp

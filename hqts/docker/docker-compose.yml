@@ -1,0 +1,44 @@
+# Placeholder for docker-compose.yml
+# This file can be used to define and run multi-container Docker applications,
+# for example, HQTS application along with a database or other services.
+
+version: '3.8'
+
+services:
+  hqts_app:
+    build:
+      context: .. # Assuming Dockerfile is in ../ (hqts/)
+      dockerfile: docker/Dockerfile # Path to the production Dockerfile
+    image: hqts:latest
+    container_name: hqts_service
+    ports:
+      - "8080:8080" # Example: Map host port 8080 to container port 8080
+    volumes:
+      # Example: Mount a volume for persistent data or configuration
+      # - ./config/production:/opt/hqts/config
+      - ../config:/app/config # Mount local config for easy changes during dev
+    environment:
+      # Example: Set environment variables for the application
+      - HQTS_LOG_LEVEL=info
+      # - DATABASE_URL=postgres://user:password@db_host:5432/hqts_db
+    restart: unless-stopped
+    # depends_on:
+      # - database_service # If HQTS depends on another service
+
+  # Example of a dependent service (e.g., a database)
+  # database_service:
+  #   image: postgres:13
+  #   container_name: hqts_postgres_db
+  #   environment:
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: hqts_db
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+# Define named volumes for persistent storage
+# volumes:
+#   postgres_data:

@@ -1,0 +1,5 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for a JSON library (e.g., nlohmann/json, RapidJSON).
+# The library source code (or a link to it as a submodule) will be placed here.
+# This directory might also contain specific build configurations for the JSON library
+# within the HQTS project.
