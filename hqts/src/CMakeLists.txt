@@ -6,6 +6,8 @@ add_library(hqts_core STATIC
     core/flow_context.cpp
     scheduler/strict_priority_scheduler.cpp # Added
     scheduler/wrr_scheduler.cpp             # Added
+    scheduler/drr_scheduler.cpp             # Added
+    scheduler/hfsc_scheduler.cpp            # Added
 
     # Policy components (if any .cpp files existed, e.g. policy_tree.cpp)
     # policy/policy_tree.cpp
