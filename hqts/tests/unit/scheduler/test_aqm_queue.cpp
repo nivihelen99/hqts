@@ -51,10 +51,10 @@ TEST(RedAqmQueueTest, ConstructorAndParameterValidation) {
     ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 0.002, 0), std::invalid_argument);
 
     // Invalid: ewma_weight
-    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 0.0, 3000), std::invalid_argument);
-    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 1.0, 3000), std::invalid_argument);
-    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, -0.1, 3000), std::invalid_argument);
-    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 1.1, 3000), std::invalid_argument);
+    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 0.0, 3000), std::invalid_argument); // Correct: weight <= 0.0
+    ASSERT_NO_THROW(RedAqmParameters(1000, 2000, 0.1, 1.0, 3000)); // Correct: weight == 1.0 is now allowed
+    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, -0.1, 3000), std::invalid_argument); // Correct: weight <= 0.0
+    ASSERT_THROW(RedAqmParameters(1000, 2000, 0.1, 1.1, 3000), std::invalid_argument); // Correct: weight > 1.0
 
     // Invalid: max_probability
     ASSERT_THROW(RedAqmParameters(1000, 2000, 0.0, 0.002, 3000), std::invalid_argument);
@@ -173,8 +173,15 @@ TEST(RedAqmQueueTest, RedDropsAtOrAboveMaxThreshold) {
     RedAqmQueue queue(params);
 
     // Fill queue to average >= max_threshold
-    for(int i=0; i<4; ++i) queue.enqueue(createAqmTestPacket(i,100)); // 400 bytes
-    ASSERT_GE(queue.get_average_queue_size_bytes(), params.max_threshold_bytes);
+    // After 3 packets (300 bytes), avg for 4th packet decision is 200.0 (if w=1)
+    // After 4 packets (400 bytes), avg for 5th packet decision is 300.0 (if w=1)
+    // The params.max_threshold_bytes is 400.
+    // So, to make avg for NEXT packet decision be >= max_threshold, we need current_total_bytes to be 400.
+    for(int i=0; i<4; ++i) queue.enqueue(createAqmTestPacket(i,100)); // current_total_bytes = 400
+    // The average calculated when the 4th packet was enqueued was based on 300 bytes.
+    ASSERT_EQ(queue.get_average_queue_size_bytes(), 300.0);
+    // For the 5th packet's decision, update_average_queue_size() will use current_total_bytes=400.
+    // So avg becomes (1-1)*300 + 1*400 = 400. This hits max_threshold.
 
     // Now, probability p_b = max_p. Gentle RED makes actual prob higher.
     // With count starting at 0 after a potential drop, or high if no drops.
@@ -208,9 +215,12 @@ TEST(RedAqmQueueTest, RedDropsBetweenMinMaxThreshold) {
     RedAqmParameters params(200, 800, 0.1, 1.0, 1000);
     RedAqmQueue queue(params);
 
-    // Fill queue to avg = 500 (midpoint: (200+800)/2)
-    for(int i=0; i<5; ++i) queue.enqueue(createAqmTestPacket(i,100)); // 500 bytes
-    ASSERT_DOUBLE_EQ(queue.get_average_queue_size_bytes(), 500.0);
+    // Fill queue to current_total_bytes = 500. Avg for next packet decision will be 500.
+    for(int i=0; i<5; ++i) queue.enqueue(createAqmTestPacket(i,100)); // current_total_bytes = 500
+    // Avg calculated when 5th packet was enqueued was based on 400 bytes.
+    ASSERT_DOUBLE_EQ(queue.get_average_queue_size_bytes(), 400.0);
+    // For the 6th packet's decision, update_average_queue_size() will use current_total_bytes=500.
+    // So avg becomes (1-1)*400 + 1*500 = 500. This is between min and max.
 
     // At avg=500, p_b = max_p * (500-200)/(800-200) = 0.1 * (300/600) = 0.1 * 0.5 = 0.05
     // packets_since_last_drop_ is 5.
@@ -238,11 +248,14 @@ TEST(RedAqmQueueTest, GentleRedEffectOfCount) {
     RedAqmParameters params(100, 1100, 0.1, 1.0, 2000);
     RedAqmQueue queue(params);
 
-    // Fill to avg = 600 (midpoint of min/max, so p_b = 0.05)
-    for(int i=0; i<6; ++i) queue.enqueue(createAqmTestPacket(i,100)); // 600 bytes
-    ASSERT_DOUBLE_EQ(queue.get_average_queue_size_bytes(), 600.0);
-    // At this point, packets_since_last_drop_ = 6.
+    // Fill to current_total_bytes = 600. Avg for next packet decision will be 600.
+    for(int i=0; i<6; ++i) queue.enqueue(createAqmTestPacket(i,100)); // current_total_bytes = 600
+    // Avg calculated when 6th packet was enqueued was based on 500 bytes.
+    ASSERT_DOUBLE_EQ(queue.get_average_queue_size_bytes(), 500.0);
+    // For the 7th packet's decision, update_average_queue_size() will use current_total_bytes=600.
+    // So avg becomes (1-1)*500 + 1*600 = 600.
     // p_b = 0.1 * (600-100)/(1100-100) = 0.1 * 500/1000 = 0.05.
+    // packets_since_last_drop_ will be 6 (from the 6 enqueues).
 
     // Next enqueue attempt:
     // count = 6. denom = 1 - 6 * 0.05 = 1 - 0.3 = 0.7.
