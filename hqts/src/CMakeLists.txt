@@ -11,6 +11,7 @@ add_library(hqts_core STATIC
     scheduler/aqm_queue.cpp                 # Added
     core/traffic_shaper.cpp                 # Added (was missing from explicit list)
     dataplane/flow_classifier.cpp           # Added
+    core/packet_pipeline.cpp                # Added
 
     # Policy components (if any .cpp files existed, e.g. policy_tree.cpp)
     # policy/policy_tree.cpp
