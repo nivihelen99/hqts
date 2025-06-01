@@ -2,13 +2,18 @@
 #define HQTS_DATAPLANE_FLOW_CLASSIFIER_H_
 
 #include "hqts/dataplane/flow_identifier.h" // For FiveTuple, FlowKey
-#include "hqts/core/flow_context.h"        // For core::FlowId, FlowContext, core::FlowTable
 #include "hqts/policy/policy_types.h"      // For policy::PolicyId
-// #include "hqts/scheduler/packet_descriptor.h" // Not directly needed if FiveTuple is passed
-
+#include <cstdint>                         // For std::uint64_t
 #include <unordered_map>
 #include <mutex>    // For std::mutex and std::lock_guard
 #include <memory>   // For std::shared_ptr (not used here, but often in similar contexts)
+
+// Forward declaration for FlowTable
+namespace hqts { namespace core { class FlowTable; } }
+
+// Ensure core::FlowId is defined for use in this header
+// (Matches the definition in hqts/core/flow_context.h)
+namespace hqts { namespace core { using FlowId = std::uint64_t; } }
 
 namespace hqts {
 namespace dataplane {
