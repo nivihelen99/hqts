@@ -34,7 +34,8 @@ protected:
 const policy::PolicyId FlowClassifierTest::DEFAULT_POLICY_ID;
 
 TEST_F(FlowClassifierTest, CreateNewFlow) {
-    FiveTuple tuple1(192, 168, 1, 1, 10, 20, 6); // src_ip, dest_ip, src_port, dest_port, proto
+    // Corrected: src_ip, dest_ip, src_port, dest_port, proto
+    FiveTuple tuple1(1, 2, 10, 20, 6);
 
     core::FlowId fid1 = classifier_->get_or_create_flow(tuple1);
     ASSERT_NE(fid1, 0); // Assuming FlowId 0 is invalid or reserved
@@ -49,7 +50,8 @@ TEST_F(FlowClassifierTest, CreateNewFlow) {
 }
 
 TEST_F(FlowClassifierTest, GetExistingFlow) {
-    FiveTuple tuple1(192, 168, 1, 1, 10, 20, 6);
+    // Corrected: src_ip, dest_ip, src_port, dest_port, proto
+    FiveTuple tuple1(1, 2, 10, 20, 6);
     core::FlowId fid1_initial = classifier_->get_or_create_flow(tuple1);
     ASSERT_EQ(test_flow_table_.size(), 1);
 
@@ -59,9 +61,10 @@ TEST_F(FlowClassifierTest, GetExistingFlow) {
 }
 
 TEST_F(FlowClassifierTest, MultipleDistinctFlows) {
-    FiveTuple tuple1(192, 168, 1, 1, 10, 20, 6);
-    FiveTuple tuple2(192, 168, 1, 2, 30, 40, 17); // Different dest_ip, ports, proto
-    FiveTuple tuple3(10, 0, 0, 1, 100, 200, 6);   // Different src_ip
+    // Corrected: src_ip, dest_ip, src_port, dest_port, proto
+    FiveTuple tuple1(101, 102, 10, 20, 6);
+    FiveTuple tuple2(201, 202, 30, 40, 17);
+    FiveTuple tuple3(301, 302, 100, 200, 6);
 
     core::FlowId fid1 = classifier_->get_or_create_flow(tuple1);
     core::FlowId fid2 = classifier_->get_or_create_flow(tuple2);
@@ -81,8 +84,9 @@ TEST_F(FlowClassifierTest, FlowIdUniqueness) {
     std::vector<FiveTuple> tuples;
     const int num_unique_tuples = 100;
     for (int i = 0; i < num_unique_tuples; ++i) {
+        // Corrected: src_ip, dest_ip, src_port, dest_port, proto
         // Create distinct 5-tuples by varying source port
-        tuples.emplace_back(192, 168, 1, 1, static_cast<uint16_t>(1000 + i), 80, 6);
+        tuples.emplace_back(1, 2, static_cast<uint16_t>(1000 + i), 80, 6);
     }
 
     std::set<core::FlowId> generated_flow_ids;
@@ -101,7 +105,8 @@ TEST_F(FlowClassifierTest, ThreadSafety) {
     std::set<core::FlowId> all_generated_ids;
     std::mutex set_mutex;
 
-    FiveTuple common_tuple(10, 20, 30, 40, 50, 60, 6);
+    // Corrected: src_ip, dest_ip, src_port, dest_port, proto
+    FiveTuple common_tuple(1020, 3040, 50, 60, 6);
     // The first thread to grab the lock for common_tuple will create it. Others will get existing.
     // No need to pre-fetch common_fid_expected before threads, classifier should handle the race.
 
@@ -112,7 +117,14 @@ TEST_F(FlowClassifierTest, ThreadSafety) {
                 if (j % 10 == 0) {
                     local_ids.push_back(classifier_->get_or_create_flow(common_tuple));
                 } else {
-                    FiveTuple unique_tuple(1,1,1,1, static_cast<uint16_t>(i), static_cast<uint16_t>(j), 17);
+                    // Corrected: src_ip, dest_ip, src_port, dest_port, proto
+                    // Make IPs vary with thread i, ports with loop j for uniqueness
+                    FiveTuple unique_tuple(
+                        static_cast<uint32_t>(100 + i),
+                        static_cast<uint32_t>(200 + i),
+                        static_cast<uint16_t>(j),
+                        static_cast<uint16_t>(j + 1),
+                        17);
                     local_ids.push_back(classifier_->get_or_create_flow(unique_tuple));
                 }
             }
