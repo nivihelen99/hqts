@@ -141,16 +141,24 @@ TEST_F(PacketPipelineTest, PacketDroppedByShaperPolicy) {
     pipeline_->handle_incoming_packet(tuple_drop, 150);
 
     // P3 (10B): Should also be RED and dropped, as buckets are still empty.
-    pipeline_->handle_incoming_packet(tuple_drop, 10);
+    pipeline_->handle_incoming_packet(tuple_drop, 10); // This should be P3
 
-    scheduler::PacketDescriptor packet_out1 = pipeline_->get_next_packet_to_transmit();
+    scheduler::PacketDescriptor packet_out1 = pipeline_->get_next_packet_to_transmit(); // Should be P1
     ASSERT_NE(packet_out1.packet_length_bytes, 0);
+    ASSERT_EQ(packet_out1.packet_length_bytes, 150); // P1 size
     ASSERT_EQ(packet_out1.flow_id, classifier_->get_or_create_flow(tuple_drop));
     ASSERT_EQ(packet_out1.conformance, scheduler::ConformanceLevel::GREEN); // P1 was GREEN
 
-    // Only P1 should have been enqueued.
+    scheduler::PacketDescriptor packet_out2 = pipeline_->get_next_packet_to_transmit(); // Should be P3
+    ASSERT_NE(packet_out2.packet_length_bytes, 0);
+    ASSERT_EQ(packet_out2.packet_length_bytes, 10);  // P3 size
+    ASSERT_EQ(packet_out2.flow_id, classifier_->get_or_create_flow(tuple_drop)); // Same flow
+    ASSERT_EQ(packet_out2.conformance, scheduler::ConformanceLevel::GREEN); // P3 was also GREEN
+
+    // Now the scheduler should be empty as P2 was dropped.
     scheduler::PacketDescriptor packet_out_empty = pipeline_->get_next_packet_to_transmit();
     ASSERT_EQ(packet_out_empty.packet_length_bytes, 0);
+    ASSERT_EQ(packet_out_empty.flow_id, 0); // Default constructor for PacketDescriptor sets flow_id to 0
 }
 
 
