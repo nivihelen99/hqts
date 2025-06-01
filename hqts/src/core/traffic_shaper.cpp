@@ -1,7 +1,7 @@
 #include "hqts/core/traffic_shaper.h"
-#include "hqts/dataplane/flow_classifier.h" // For FlowClassifier
-#include "hqts/dataplane/flow_identifier.h"// For FiveTuple
-#include "hqts/core/flow_context.h"        // For FlowTable, FlowContext
+// Other necessary direct includes for .cpp specific types if any, were already added/verified.
+// flow_classifier.h, flow_identifier.h, flow_context.h, flow_table.h should be
+// transitively included via traffic_shaper.h now.
 #include <stdexcept> // For std::runtime_error
 #include <string>    // For std::to_string in error messages
 
