@@ -140,5 +140,13 @@ const RedAqmParameters& RedAqmQueue::get_parameters() const {
     return params_;
 }
 
+// Public method: front (const)
+const PacketDescriptor& RedAqmQueue::front() const {
+    if (is_empty()) {
+        throw std::runtime_error("RedAqmQueue: front() called on empty queue.");
+    }
+    return packet_buffer_.front();
+}
+
 } // namespace scheduler
 } // namespace hqts

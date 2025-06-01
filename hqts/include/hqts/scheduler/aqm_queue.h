@@ -61,6 +61,9 @@ public:
     // Gets the configured RED parameters.
     const RedAqmParameters& get_parameters() const;
 
+    // Peeks at the front packet without removing it. Throws std::runtime_error if empty.
+    const PacketDescriptor& front() const;
+
 private:
     // Calculates the current drop probability based on average queue size.
     double calculate_drop_probability() const;
