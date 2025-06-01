@@ -31,6 +31,7 @@ add_executable(run_hqts_tests
     unit/scheduler/test_wrr_scheduler.cpp             # Added
     unit/scheduler/test_drr_scheduler.cpp             # Added
     unit/scheduler/test_hfsc_scheduler.cpp            # Added
+    unit/scheduler/test_aqm_queue.cpp                 # Added
     # Add new test_*.cpp files here as they are created
 )
 
