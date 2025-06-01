@@ -25,7 +25,7 @@ struct RedAqmParameters {
     RedAqmParameters(uint32_t min_t, uint32_t max_t, double max_p, double weight, uint32_t capacity)
         : min_threshold_bytes(min_t), max_threshold_bytes(max_t),
           max_probability(max_p), ewma_weight(weight), queue_capacity_bytes(capacity) {
-        if (min_t == 0 || max_t == 0 || capacity == 0 || min_t >= max_t || max_t > capacity || weight <= 0.0 || weight >= 1.0 || max_p <= 0.0 || max_p > 1.0) {
+        if (min_t == 0 || max_t == 0 || capacity == 0 || min_t >= max_t || max_t > capacity || weight <= 0.0 || weight > 1.0 || max_p <= 0.0 || max_p > 1.0) {
             // Consider more specific error messages for each condition if desired
             throw std::invalid_argument("Invalid RED AQM parameters provided to constructor.");
         }
