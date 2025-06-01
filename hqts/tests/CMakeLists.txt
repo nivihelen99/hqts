@@ -32,6 +32,8 @@ add_executable(run_hqts_tests
     unit/scheduler/test_drr_scheduler.cpp             # Added
     unit/scheduler/test_hfsc_scheduler.cpp            # Added
     unit/scheduler/test_aqm_queue.cpp                 # Added
+    unit/core/test_traffic_shaper.cpp                 # Added (was missing from explicit list)
+    unit/dataplane/test_flow_classifier.cpp           # Added
     # Add new test_*.cpp files here as they are created
 )
 

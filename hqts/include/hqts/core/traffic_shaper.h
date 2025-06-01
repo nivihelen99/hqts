@@ -1,13 +1,14 @@
 #ifndef HQTS_CORE_TRAFFIC_SHAPER_H_
 #define HQTS_CORE_TRAFFIC_SHAPER_H_
 
-#include "hqts/core/flow_context.h"
-#include "hqts/core/shaping_policy.h" // Includes TokenBucket
-#include "hqts/policy/policy_tree.h"  // For PolicyTree
-#include "hqts/scheduler/packet_descriptor.h"
-// #include "hqts/scheduler/scheduler_interface.h" // Not directly used in this phase of TrafficShaper
+#include "hqts/core/flow_context.h"        // For FlowContext, FlowTable, core::FlowId
+#include "hqts/core/shaping_policy.h"      // Includes TokenBucket
+#include "hqts/policy/policy_tree.h"       // For PolicyTree
+#include "hqts/scheduler/packet_descriptor.h"// For PacketDescriptor
+#include "hqts/dataplane/flow_classifier.h"// For FlowClassifier
+#include "hqts/dataplane/flow_identifier.h"// For FiveTuple
 
-#include <memory> // For std::shared_ptr or std::reference_wrapper (not strictly needed with references)
+#include <memory>
 #include <map>    // For potential scheduler_map_ if used later
 
 namespace hqts {
@@ -17,11 +18,15 @@ class TrafficShaper {
 public:
     /**
      * @brief Constructor for TrafficShaper.
-     * @param policy_tree A non-const reference to the policy tree, as token bucket states will be modified.
+     * @param policy_tree A non-const reference to the policy tree for policy lookups.
+     * @param flow_classifier A reference to the flow classifier for FlowId retrieval/creation.
+     * @param flow_table A reference to the flow table for accessing FlowContext.
      */
-    explicit TrafficShaper(policy::PolicyTree& policy_tree);
+    explicit TrafficShaper(policy::PolicyTree& policy_tree,
+                           dataplane::FlowClassifier& flow_classifier,
+                           core::FlowTable& flow_table);
 
-    // TrafficShaper is likely unique and stateful, manage copying carefully if needed.
+    // TrafficShaper is stateful (via references) and unique in its role.
     TrafficShaper(const TrafficShaper&) = delete;
     TrafficShaper& operator=(const TrafficShaper&) = delete;
     TrafficShaper(TrafficShaper&&) = default;
@@ -39,15 +44,17 @@ public:
      * by the shaper based on policy rules like 'drop_on_red'). False means the shaper
      * determined the packet should be dropped.
      *
-     * @param packet The packet descriptor to process. Modified by reference.
-     * @param flow_context The flow context providing the policy_id for this packet.
+     * @param packet The packet descriptor to process. Modified by reference (flow_id, conformance, priority).
+     * @param five_tuple The 5-tuple used to classify the packet and find/create its flow context.
      * @return True if the packet is to be enqueued, false if it should be dropped.
-     * @throws std::runtime_error if no policy is found for the flow's policy_id.
+     * @throws std::runtime_error if policy or flow context issues occur.
      */
-    bool process_packet(scheduler::PacketDescriptor& packet, const FlowContext& flow_context);
+    bool process_packet(scheduler::PacketDescriptor& packet, const dataplane::FiveTuple& five_tuple);
 
 private:
-    policy::PolicyTree& policy_tree_; // Non-const reference to allow modification of policies (token buckets)
+    policy::PolicyTree& policy_tree_;
+    dataplane::FlowClassifier& flow_classifier_;
+    core::FlowTable& flow_table_;
 
     // Example for future scheduler interaction (not used in this subtask):
     // scheduler::SchedulerInterface* target_scheduler_;

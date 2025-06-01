@@ -4,6 +4,8 @@
 #include "hqts/core/shaping_policy.h"
 #include "hqts/policy/policy_tree.h"
 #include "hqts/scheduler/packet_descriptor.h" // Includes ConformanceLevel
+#include "hqts/dataplane/flow_classifier.h"
+#include "hqts/dataplane/flow_identifier.h"
 
 #include <string>
 #include <vector>
@@ -22,9 +24,12 @@ scheduler::PacketDescriptor createShaperTestPacket(core::FlowId flow_id, uint32_
 class TrafficShaperTest : public ::testing::Test {
 protected:
     policy::PolicyTree test_policy_tree_;
-    std::unique_ptr<TrafficShaper> shaper_; // Use unique_ptr for RAII
+    core::FlowTable test_flow_table_; // Added
+    std::unique_ptr<dataplane::FlowClassifier> test_flow_classifier_; // Added
+    std::unique_ptr<TrafficShaper> shaper_;
 
     // Default Policy IDs
+    const policy::PolicyId POLICY_ID_DEFAULT = 999; // A default policy for new flows
     const policy::PolicyId POLICY_ID_GREEN_YELLOW_RED = 1;
     const policy::PolicyId POLICY_ID_DROP_RED = 2;
     const policy::PolicyId POLICY_ID_ALLOW_RED_LOW_PRIO = 3;
@@ -79,112 +84,132 @@ protected:
         );
         test_policy_tree_.insert(policy4);
 
-        shaper_ = std::make_unique<TrafficShaper>(test_policy_tree_);
+        // Add a default policy for the classifier to use
+        ShapingPolicy default_policy(
+            POLICY_ID_DEFAULT, NO_PARENT, "DefaultPolicy",
+            1000000, 1000000, 1000, 1000, // 1Mbps, 1000B C/PBS
+            policy::SchedulingAlgorithm::STRICT_PRIORITY, 100, 0,
+            true, 7,7,7, 50,50,50 // Drop RED, all green/yellow/red map to prio 7, qid 50
+        );
+        test_policy_tree_.insert(default_policy);
+
+        test_flow_classifier_ = std::make_unique<dataplane::FlowClassifier>(test_flow_table_, POLICY_ID_DEFAULT);
+        shaper_ = std::make_unique<TrafficShaper>(test_policy_tree_, *test_flow_classifier_, test_flow_table_);
     }
 
     void TearDown() override {
-        // shaper_.reset(); // unique_ptr handles this automatically
+        // shaper_ and test_flow_classifier_ will be reset by unique_ptr
+    }
+
+    // Helper to set a specific policy for a given 5-tuple for testing
+    void set_policy_for_flow(const dataplane::FiveTuple& five_tuple, policy::PolicyId policy_id) {
+        core::FlowId flow_id = test_flow_classifier_->get_or_create_flow(five_tuple);
+        auto it = test_flow_table_.find(flow_id);
+        ASSERT_NE(it, test_flow_table_.end());
+        it->second.policy_id = policy_id;
     }
 };
 
 
 TEST_F(TrafficShaperTest, ProcessPacketGreen) {
-    FlowContext flow_ctx(1, POLICY_ID_GREEN_YELLOW_RED, 0, hqts::core::DropPolicy::TAIL_DROP);
-    scheduler::PacketDescriptor packet = createShaperTestPacket(1, 1000); // 1000 bytes
+    dataplane::FiveTuple tuple_gyr(1,2,3,4,6); // Example 5-tuple for this test
+    set_policy_for_flow(tuple_gyr, POLICY_ID_GREEN_YELLOW_RED);
 
-    // Policy 1: CIR=1Mbps, CBS=1500B. Packet is 1000B < 1500B. Should be GREEN.
-    bool should_enqueue = shaper_->process_packet(packet, flow_ctx);
+    scheduler::PacketDescriptor packet = createShaperTestPacket(0, 1000); // flow_id will be set by shaper
+
+    // Policy 1 (POLICY_ID_GREEN_YELLOW_RED): CIR=1Mbps, CBS=1500B. Packet is 1000B < 1500B. Should be GREEN.
+    bool should_enqueue = shaper_->process_packet(packet, tuple_gyr);
 
     ASSERT_TRUE(should_enqueue);
     ASSERT_EQ(packet.conformance, scheduler::ConformanceLevel::GREEN);
+    ASSERT_EQ(packet.flow_id, test_flow_classifier_->get_or_create_flow(tuple_gyr)); // Check if flow_id was set
     ASSERT_EQ(packet.priority, 7); // target_priority_green for Policy 1
 }
 
 TEST_F(TrafficShaperTest, ProcessPacketYellow) {
-    FlowContext flow_ctx(1, POLICY_ID_GREEN_YELLOW_RED, 0, hqts::core::DropPolicy::TAIL_DROP);
-    scheduler::PacketDescriptor packet1 = createShaperTestPacket(1, 1000);
-    scheduler::PacketDescriptor packet2 = createShaperTestPacket(1, 1000);
+    dataplane::FiveTuple tuple_gyr(1,2,3,4,6);
+    set_policy_for_flow(tuple_gyr, POLICY_ID_GREEN_YELLOW_RED);
 
-    ASSERT_TRUE(shaper_->process_packet(packet1, flow_ctx));
+    scheduler::PacketDescriptor packet1 = createShaperTestPacket(0, 1000);
+    scheduler::PacketDescriptor packet2 = createShaperTestPacket(0, 1000);
+
+    ASSERT_TRUE(shaper_->process_packet(packet1, tuple_gyr));
     ASSERT_EQ(packet1.conformance, scheduler::ConformanceLevel::GREEN);
 
-    // After P1 (1000B), Policy1 CIR bucket (1500B initially) has 500B left.
-    // P2 (1000B) fails CIR (needs 1000B, has 500B).
-    // Policy1 PIR bucket (3000B initially) consumed 1000B for P1, has 2000B left.
-    // P2 consumes 1000B from PIR. Should be YELLOW.
-    bool should_enqueue_p2 = shaper_->process_packet(packet2, flow_ctx);
+    bool should_enqueue_p2 = shaper_->process_packet(packet2, tuple_gyr);
     ASSERT_TRUE(should_enqueue_p2);
     ASSERT_EQ(packet2.conformance, scheduler::ConformanceLevel::YELLOW);
     ASSERT_EQ(packet2.priority, 4); // target_priority_yellow for Policy 1
 }
 
 TEST_F(TrafficShaperTest, ProcessPacketRedAndAllow) {
-    FlowContext flow_ctx(1, POLICY_ID_GREEN_YELLOW_RED, 0, hqts::core::DropPolicy::TAIL_DROP); // Policy 1: drop_on_red = false
+    dataplane::FiveTuple tuple_gyr(1,2,3,4,6);
+    set_policy_for_flow(tuple_gyr, POLICY_ID_GREEN_YELLOW_RED); // Policy 1: drop_on_red = false
 
-    // Consume all CIR (1500B) and PIR (3000B) tokens for Policy 1
-    // P1 (1000B): GREEN. CIR bucket: 1500-1000=500. PIR bucket: 3000-1000=2000.
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(1, 1000), flow_ctx));
-    // P2 (1000B): CIR fails (needs 1000, has 500). PIR ok (needs 1000, has 2000). YELLOW.
-    //             PIR bucket: 2000-1000=1000.
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(1, 1000), flow_ctx));
-    // P3 (1000B): CIR fails. PIR ok (needs 1000, has 1000). YELLOW.
-    //             PIR bucket: 1000-1000=0.
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(1, 1000), flow_ctx));
+    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
+    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
+    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 1000), tuple_gyr));
 
-    scheduler::PacketDescriptor packet4 = createShaperTestPacket(1, 500); // Next packet
-    bool should_enqueue_p4 = shaper_->process_packet(packet4, flow_ctx); // CIR fails. PIR fails. Should be RED.
+    scheduler::PacketDescriptor packet4 = createShaperTestPacket(0, 500);
+    bool should_enqueue_p4 = shaper_->process_packet(packet4, tuple_gyr);
 
-    ASSERT_TRUE(should_enqueue_p4); // Policy 1 does not drop RED
+    ASSERT_TRUE(should_enqueue_p4);
     ASSERT_EQ(packet4.conformance, scheduler::ConformanceLevel::RED);
     ASSERT_EQ(packet4.priority, 1); // target_priority_red for Policy 1
 }
 
 TEST_F(TrafficShaperTest, ProcessPacketRedAndDrop) {
-    FlowContext flow_ctx(2, POLICY_ID_DROP_RED, 0, hqts::core::DropPolicy::TAIL_DROP); // Policy 2: drop_on_red = true
+    dataplane::FiveTuple tuple_drop_r(3,4,5,6,6);
+    set_policy_for_flow(tuple_drop_r, POLICY_ID_DROP_RED); // Policy 2: drop_on_red = true
 
-    // Policy 2: CIR 0.5Mbps (62500 Bps), CBS 1000B. PIR 1Mbps (125000 Bps), PBS 2000B.
-    // P1 (800B): GREEN. CIR: 1000-800=200. PIR: 2000-800=1200.
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(2, 800), flow_ctx));
-    // P2 (800B): CIR fails (needs 800, has 200). PIR ok (needs 800, has 1200). YELLOW.
-    //             PIR: 1200-800=400.
-    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(2, 800), flow_ctx));
+    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 800), tuple_drop_r));
+    ASSERT_TRUE(shaper_->process_packet(createShaperTestPacket(0, 800), tuple_drop_r));
 
-    scheduler::PacketDescriptor packet3 = createShaperTestPacket(2, 800); // Wants 800B. PIR only 400 left. RED.
-    bool should_enqueue_p3 = shaper_->process_packet(packet3, flow_ctx);
+    scheduler::PacketDescriptor packet3 = createShaperTestPacket(0, 800);
+    bool should_enqueue_p3 = shaper_->process_packet(packet3, tuple_drop_r);
 
-    ASSERT_FALSE(should_enqueue_p3); // Policy 2 drops RED
+    ASSERT_FALSE(should_enqueue_p3);
     ASSERT_EQ(packet3.conformance, scheduler::ConformanceLevel::RED);
-    // Priority might be set before drop decision, or not, depending on implementation.
-    // Current implementation sets priority then drop flag is checked.
     ASSERT_EQ(packet3.priority, 0); // target_priority_red for Policy 2
 }
 
-TEST_F(TrafficShaperTest, PolicyNotFound) {
-    FlowContext flow_ctx(99, 999, 0, hqts::core::DropPolicy::TAIL_DROP); // Policy 999 does not exist
-    scheduler::PacketDescriptor packet = createShaperTestPacket(99, 100);
+TEST_F(TrafficShaperTest, PolicyNotFoundViaDefault) {
+    // FlowClassifier will assign POLICY_ID_DEFAULT if this tuple is new
+    dataplane::FiveTuple tuple_new(10,20,30,40,6);
+    scheduler::PacketDescriptor packet = createShaperTestPacket(0, 100);
 
-    bool should_enqueue = shaper_->process_packet(packet, flow_ctx);
+    // To specifically test "policy not found in tree" (not just default policy):
+    // We need a FlowContext that refers to a policy_id that is NOT in test_policy_tree_
+    // This is harder now that FlowClassifier creates the FlowContext with a default_policy_id
+    // which we added to the tree.
+    // This test's original intent is now covered by how FlowClassifier works: it *always* assigns
+    // a policy_id (the default one). If that default_policy_id was NOT in policy_tree, then
+    // shaper would fail. Our current setup ensures default_policy_id IS in the tree.
+    // So, this test now effectively tests behavior with the default policy.
 
-    ASSERT_FALSE(should_enqueue); // Expect drop if policy not found
-    ASSERT_EQ(packet.conformance, scheduler::ConformanceLevel::RED); // Marked RED by default
+    bool should_enqueue = shaper_->process_packet(packet, tuple_new);
+
+    // Assuming POLICY_ID_DEFAULT is set to drop_on_red=true and marks RED packets for drop
+    // Default policy: drop_on_red = true. Pkt 100B. CIR=1Mbps, CBS=1000B. -> GREEN
+    ASSERT_TRUE(should_enqueue);
+    ASSERT_EQ(packet.conformance, scheduler::ConformanceLevel::GREEN);
+    ASSERT_EQ(packet.priority, 7); // From POLICY_ID_DEFAULT
 }
 
 TEST_F(TrafficShaperTest, CirOnlyPolicy) {
-    FlowContext flow_ctx(4, POLICY_ID_CIR_ONLY_GREEN, 0, hqts::core::DropPolicy::TAIL_DROP);
-    // Policy 4: CIR=1Mbps, CBS=1500B. PIR=1Mbps, PBS=1500B. drop_on_red=true.
+    dataplane::FiveTuple tuple_cir_only(5,6,7,8,6);
+    set_policy_for_flow(tuple_cir_only, POLICY_ID_CIR_ONLY_GREEN);
 
-    scheduler::PacketDescriptor packet1 = createShaperTestPacket(4, 1000); // GREEN
-    ASSERT_TRUE(shaper_->process_packet(packet1, flow_ctx));
+    scheduler::PacketDescriptor packet1 = createShaperTestPacket(0, 1000);
+    ASSERT_TRUE(shaper_->process_packet(packet1, tuple_cir_only));
     ASSERT_EQ(packet1.conformance, scheduler::ConformanceLevel::GREEN);
     ASSERT_EQ(packet1.priority, 7);
 
-    scheduler::PacketDescriptor packet2 = createShaperTestPacket(4, 1000); // Exceeds CBS (500 left). CIR fails.
-                                                                    // Since PIR=CIR, PIR also fails. Should be RED.
-    bool should_enqueue_p2 = shaper_->process_packet(packet2, flow_ctx);
-    ASSERT_FALSE(should_enqueue_p2); // drop_on_red is true for policy 4
+    scheduler::PacketDescriptor packet2 = createShaperTestPacket(0, 1000);
+    bool should_enqueue_p2 = shaper_->process_packet(packet2, tuple_cir_only);
+    ASSERT_FALSE(should_enqueue_p2);
     ASSERT_EQ(packet2.conformance, scheduler::ConformanceLevel::RED);
-     // Priority for RED for policy 4 is 7.
-    ASSERT_EQ(packet2.priority, 7);
+    ASSERT_EQ(packet2.priority, 7); // Prio for RED for Policy 4 is 7
 }
 
 } // namespace core

@@ -9,12 +9,14 @@ add_library(hqts_core STATIC
     scheduler/drr_scheduler.cpp             # Added
     scheduler/hfsc_scheduler.cpp            # Added
     scheduler/aqm_queue.cpp                 # Added
+    core/traffic_shaper.cpp                 # Added (was missing from explicit list)
+    dataplane/flow_classifier.cpp           # Added
 
     # Policy components (if any .cpp files existed, e.g. policy_tree.cpp)
     # policy/policy_tree.cpp
 
     # Dataplane components (if any .cpp files existed, e.g. flow_table.cpp)
-    # dataplane/flow_table.cpp
+    # dataplane/flow_table.cpp # flow_table.h is header only for now
 
     # Main application logic (if main.cpp is part of the library)
     # If main.cpp is to be a separate executable, it should be in add_executable()
