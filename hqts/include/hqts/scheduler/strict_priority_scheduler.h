@@ -2,11 +2,13 @@
 #define HQTS_SCHEDULER_STRICT_PRIORITY_SCHEDULER_H_
 
 #include "hqts/scheduler/scheduler_interface.h"
-#include "hqts/scheduler/queue_types.h" // For PacketQueue
+// #include "hqts/scheduler/queue_types.h" // PacketQueue no longer directly used
+#include "hqts/scheduler/aqm_queue.h"     // For RedAqmQueue and RedAqmParameters
 
 #include <vector>
 #include <stdexcept> // For std::out_of_range, std::invalid_argument, std::runtime_error
 #include <string>    // Potentially for error messages, though not strictly required by declarations
+#include <memory>    // For std::unique_ptr, if that route was chosen
 
 namespace hqts {
 namespace scheduler {
@@ -21,11 +23,12 @@ namespace scheduler {
 class StrictPriorityScheduler : public SchedulerInterface {
 public:
     /**
-     * @brief Constructs a StrictPriorityScheduler.
-     * @param num_priority_levels The number of priority levels to manage (e.g., 8 for levels 0-7).
-     * @throws std::invalid_argument if num_priority_levels is 0.
+     * @brief Constructs a StrictPriorityScheduler with AQM-enabled queues.
+     * @param queue_params_list A vector of RedAqmParameters, one for each priority queue.
+     *                          The number of elements determines the number of priority levels.
+     * @throws std::invalid_argument if queue_params_list is empty.
      */
-    explicit StrictPriorityScheduler(size_t num_priority_levels = 8);
+    explicit StrictPriorityScheduler(const std::vector<RedAqmParameters>& queue_params_list);
 
     ~StrictPriorityScheduler() override = default;
 
@@ -71,9 +74,9 @@ public:
     size_t get_queue_size(uint8_t priority_level) const;
 
 private:
-    std::vector<PacketQueue> priority_queues_;
+    std::vector<RedAqmQueue> priority_queues_; // Now a vector of RedAqmQueues
     const size_t num_levels_;
-    size_t total_packets_ = 0; // Total number of packets across all queues
+    size_t total_packets_ = 0; // Total number of packets successfully enqueued across all AQM queues
 };
 
 } // namespace scheduler

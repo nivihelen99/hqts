@@ -21,34 +21,46 @@ enum class byte : unsigned char {};
 namespace hqts {
 namespace scheduler {
 
+// Defines the conformance level of a packet after policing/shaping.
+enum class ConformanceLevel {
+    GREEN,  // Conforms to CIR (Committed Information Rate)
+    YELLOW, // Exceeds CIR, but conforms to PIR (Peak Information Rate)
+    RED     // Exceeds PIR
+};
+
 struct PacketDescriptor {
     core::FlowId flow_id;
     uint32_t packet_length_bytes;
-    uint8_t priority; // Could be derived from flow's policy (e.g., DSCP, PCP)
+    uint8_t priority; // This will be set by TrafficShaper based on policy conformance outcomes
+                      // Schedulers (like StrictPriority or WRR using priority as QueueId) will use this.
+    ConformanceLevel conformance; // Set by the shaper/policer
 
     // Optional: Represents the packet payload or a reference to it.
-    // For a descriptor, it might not store the full payload but metadata or a pointer.
-    // Using std::vector<std::byte> for an owned, opaque payload for simplicity here.
     std::vector<std::byte> payload;
 
     // Constructor
-    PacketDescriptor(core::FlowId f_id, uint32_t len, uint8_t prio, size_t actual_payload_to_copy_size = 0)
-        : flow_id(f_id), packet_length_bytes(len), priority(prio) {
+    PacketDescriptor(
+        core::FlowId f_id,
+        uint32_t len,
+        uint8_t prio_val = 0, // Default priority, to be overwritten by shaper
+        size_t actual_payload_to_copy_size = 0,
+        ConformanceLevel conf = ConformanceLevel::GREEN // Default conformance
+    ) : flow_id(f_id),
+        packet_length_bytes(len),
+        priority(prio_val),
+        conformance(conf) {
         if (actual_payload_to_copy_size > 0) {
-            // This constructor implies copying at least part of a payload if given.
-            // In a real system, payload might be a pointer/reference or handled differently.
-            // For now, we just resize to simulate holding some data.
             payload.resize(actual_payload_to_copy_size);
-            // In a real scenario, one might do:
-            // if (source_payload_ptr && actual_payload_to_copy_size > 0) {
-            //    payload.assign(static_cast<const std::byte*>(source_payload_ptr),
-            //                   static_cast<const std::byte*>(source_payload_ptr) + actual_payload_to_copy_size);
-            // }
         }
     }
 
     // Default constructor for cases where it might be needed
-    PacketDescriptor() = default;
+    PacketDescriptor()
+      : flow_id(0),
+        packet_length_bytes(0),
+        priority(0),
+        conformance(ConformanceLevel::GREEN),
+        payload{} {}
 };
 
 } // namespace scheduler

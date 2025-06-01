@@ -3,6 +3,7 @@
 
 #include "hqts/policy/policy_types.h"
 #include "hqts/core/token_bucket.h"
+#include "hqts/core/flow_context.h" // For core::QueueId
 
 #include <cstdint>
 #include <vector>
@@ -40,6 +41,17 @@ struct ShapingPolicy {
     uint32_t weight; // Weight for WFQ, WRR, DRR
     policy::Priority priority_level; // Priority for STRICT_PRIORITY or as a tie-breaker
 
+    // Policy-to-Queue mapping and DSCP marking parameters
+    bool drop_on_red;                // If true, RED packets are dropped, else marked/re-prioritized
+    uint8_t target_priority_green;   // Target scheduler priority for GREEN packets
+    uint8_t target_priority_yellow;  // Target scheduler priority for YELLOW packets
+    uint8_t target_priority_red;     // Target scheduler priority for RED packets (if not dropped)
+    core::QueueId target_queue_id_green;  // Target scheduler QueueId for GREEN packets
+    core::QueueId target_queue_id_yellow; // Target scheduler QueueId for YELLOW packets
+    core::QueueId target_queue_id_red;    // Target scheduler QueueId for RED packets (if not dropped)
+    // DSCP values could also be added here if needed: uint8_t dscp_green, dscp_yellow, dscp_red;
+
+
     // Token bucket state
     TokenBucket cir_bucket;
     TokenBucket pir_bucket; // Used if peak_rate_bps > 0 and > committed_rate_bps
@@ -59,7 +71,15 @@ struct ShapingPolicy {
         uint64_t p_excess_burst_bytes,
         policy::SchedulingAlgorithm p_algorithm,
         uint32_t p_weight,
-        policy::Priority p_priority_level
+        policy::Priority p_priority_level,
+        // New params for mapping:
+        bool p_drop_on_red = true,
+        uint8_t prio_g = 7,
+        uint8_t prio_y = 4,
+        uint8_t prio_r = 1,
+        core::QueueId qid_g = 0,
+        core::QueueId qid_y = 0,
+        core::QueueId qid_r = 0
     );
 
     // Default constructor might be needed by Boost.MultiIndex if not all members are initialized by the main constructor
