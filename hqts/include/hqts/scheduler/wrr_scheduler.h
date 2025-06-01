@@ -2,7 +2,8 @@
 #define HQTS_SCHEDULER_WRR_SCHEDULER_H_
 
 #include "hqts/scheduler/scheduler_interface.h"
-#include "hqts/scheduler/queue_types.h" // For PacketQueue
+// #include "hqts/scheduler/queue_types.h" // No longer directly used for PacketQueue
+#include "hqts/scheduler/aqm_queue.h"     // For RedAqmQueue and RedAqmParameters
 #include "hqts/core/flow_context.h"     // For core::QueueId
 
 #include <vector>
@@ -10,6 +11,7 @@
 #include <stdexcept> // For std::out_of_range, std::invalid_argument, std::runtime_error, std::logic_error
 #include <string>    // Potentially for error messages
 #include <numeric>   // For std::accumulate or other numeric operations if needed later
+#include <memory>    // For std::unique_ptr if that was chosen for queue storage
 
 namespace hqts {
 namespace scheduler {
@@ -30,8 +32,10 @@ public:
     struct QueueConfig {
         core::QueueId id; // User-defined ID for the queue
         uint32_t weight;  // Weight for this queue (must be > 0)
+        RedAqmParameters aqm_params; // New member
 
-        QueueConfig(core::QueueId q_id, uint32_t w) : id(q_id), weight(w) {}
+        QueueConfig(core::QueueId q_id, uint32_t w, RedAqmParameters aqm_p)
+            : id(q_id), weight(w), aqm_params(std::move(aqm_p)) {}
     };
 
     /**
@@ -90,13 +94,13 @@ public:
 
 private:
     struct InternalQueueState {
-        PacketQueue packet_queue;
+        RedAqmQueue packet_queue; // Changed type
         uint32_t weight;
-        int32_t current_deficit; // Represents the current allowance for this queue
+        int32_t current_deficit;
         core::QueueId external_id; // User-facing ID
 
-        InternalQueueState(core::QueueId ext_id, uint32_t w)
-            : weight(w), current_deficit(0), external_id(ext_id) {} // Deficit often starts at 0 or weight
+        InternalQueueState(core::QueueId ext_id, uint32_t w, const RedAqmParameters& aqm_p)
+            : packet_queue(aqm_p), weight(w), current_deficit(static_cast<int32_t>(w)), external_id(ext_id) {}
     };
 
     std::vector<InternalQueueState> queues_;

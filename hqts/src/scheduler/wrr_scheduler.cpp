@@ -21,12 +21,10 @@ WrrScheduler::WrrScheduler(const std::vector<QueueConfig>& queue_configs)
             throw std::invalid_argument("WRR Scheduler: Duplicate QueueId " + std::to_string(qc.id) + " in configuration.");
         }
 
-        queues_.emplace_back(qc.id, qc.weight);
-        // Initialize current_deficit. Common practice is to start with weight, or 0.
-        // Let's start with 0, and they get replenished before first service attempt if all are 0.
-        // Or, to start them with their weight to allow immediate service:
-        queues_.back().current_deficit = static_cast<int32_t>(qc.weight);
-        queue_id_to_index_[qc.id] = i;
+        // Use the new InternalQueueState constructor that takes RedAqmParameters
+        // and initializes current_deficit to weight.
+        queues_.emplace_back(qc.id, qc.weight, qc.aqm_params);
+        queue_id_to_index_[qc.id] = i; // Map external ID to vector index
     }
     is_configured_ = true;
 }
@@ -36,7 +34,6 @@ void WrrScheduler::enqueue(PacketDescriptor packet) {
         throw std::logic_error("WRR Scheduler: Not configured. Call constructor with queue configurations.");
     }
 
-    // Using packet.priority as the core::QueueId for this scheduler
     core::QueueId target_queue_external_id = static_cast<core::QueueId>(packet.priority);
 
     auto it = queue_id_to_index_.find(target_queue_external_id);
@@ -45,8 +42,11 @@ void WrrScheduler::enqueue(PacketDescriptor packet) {
                                 " (from packet.priority) not configured for this scheduler.");
     }
 
-    queues_[it->second].packet_queue.push(std::move(packet));
-    total_packets_++;
+    // Enqueue into RedAqmQueue; increment total_packets_ only if successful
+    if (queues_[it->second].packet_queue.enqueue(std::move(packet))) {
+        total_packets_++;
+    }
+    // If RedAqmQueue::enqueue returns false, packet was dropped by AQM, total_packets_ not incremented.
 }
 
 void WrrScheduler::replenish_all_deficits() {
@@ -76,11 +76,11 @@ PacketDescriptor WrrScheduler::dequeue() {
             size_t actual_index = (current_queue_index_ + i) % num_queues;
             InternalQueueState& current_q_state = queues_[actual_index];
 
-            if (!current_q_state.packet_queue.empty() && current_q_state.current_deficit > 0) {
-                can_service_any_queue_in_current_state = true; // Found a queue that could be serviced
+            if (!current_q_state.packet_queue.is_empty() && current_q_state.current_deficit > 0) {
+                can_service_any_queue_in_current_state = true;
 
-                PacketDescriptor packet = current_q_state.packet_queue.front();
-                current_q_state.packet_queue.pop();
+                // Dequeue from RedAqmQueue
+                PacketDescriptor packet = current_q_state.packet_queue.dequeue();
                 current_q_state.current_deficit--;
                 total_packets_--;
 
@@ -131,7 +131,7 @@ size_t WrrScheduler::get_queue_size(core::QueueId queue_id) const {
     if (it == queue_id_to_index_.end()) {
         throw std::out_of_range("WRR Scheduler: QueueId " + std::to_string(queue_id) + " not configured.");
     }
-    return queues_[it->second].packet_queue.size();
+    return queues_[it->second].packet_queue.get_current_packet_count();
 }
 
 size_t WrrScheduler::get_num_queues() const {
