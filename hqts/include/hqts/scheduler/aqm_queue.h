@@ -8,6 +8,7 @@
 #include <string> // For potential error messages
 #include <stdexcept> // For exceptions
 #include <chrono> // For time if needed for EWMA weight calculation or stats
+#include <random> // For std::mt19937, std::uniform_real_distribution
 
 namespace hqts {
 namespace scheduler {
@@ -86,8 +87,11 @@ private:
     // A common approach is to have a non-const "should_drop_packet" method that uses it.
     // Or, pass a random generator reference.
     // For simplicity in header, we omit its declaration here, will be in .cpp.
-    // mutable std::mt19937 random_generator_;
-    // mutable std::uniform_real_distribution<double> probability_distribution_;
+    // mutable std::mt19937 random_generator_;  // Now declared below
+    // mutable std::uniform_real_distribution<double> probability_distribution_; // Now declared below
+
+    std::mt19937 random_generator_;
+    std::uniform_real_distribution<double> probability_distribution_;
 };
 
 } // namespace scheduler
