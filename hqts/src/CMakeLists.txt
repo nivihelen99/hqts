@@ -8,6 +8,7 @@ add_library(hqts_core STATIC
     scheduler/wrr_scheduler.cpp             # Added
     scheduler/drr_scheduler.cpp             # Added
     scheduler/hfsc_scheduler.cpp            # Added
+    scheduler/aqm_queue.cpp                 # Added
 
     # Policy components (if any .cpp files existed, e.g. policy_tree.cpp)
     # policy/policy_tree.cpp
