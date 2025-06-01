@@ -34,17 +34,19 @@ struct HfscFlowState {
 
     // HFSC internal state variables (times are typically in a virtual domain)
     uint64_t virtual_start_time = 0;  // Becomes eligible_time based on real-time curve
-    uint64_t virtual_finish_time = 0; // Used for link-sharing curve scheduling
-    uint64_t eligible_time = 0;       // Earliest time this flow can be serviced based on real-time SC
+    uint64_t virtual_finish_time = 0; // Used for link-sharing curve scheduling (or chosen RT/LS VFT)
+    uint64_t eligible_time = 0;       // Earliest time this flow can be serviced based on RT/LS and UL curves
                                       // This could be actual time (e.g. nanoseconds from epoch) or virtual time
+    uint64_t virtual_finish_time_ul = 0; // Tracks the VFT based on UL curve for the last packet of this flow
+
+    core::FlowId parent_id = 0; // 0 or a special constant for no parent
+    std::vector<core::FlowId> children_ids; // List of child flow/class IDs
 
     // Statistics or other per-flow state can be added here
     // uint64_t current_bytes_in_queue = 0;
 
     // Constructor
-    explicit HfscFlowState(core::FlowId id = 0) : flow_id(id) {}
-    // Default constructor is fine for map if elements are populated after insertion,
-    // but an explicit one is good practice.
+    explicit HfscFlowState(core::FlowId id = 0, core::FlowId p_id = 0) : flow_id(id), parent_id(p_id) {}
 };
 
 /**
@@ -61,13 +63,14 @@ class HfscScheduler : public SchedulerInterface {
 public:
     struct FlowConfig {
         core::FlowId id;
+        core::FlowId parent_id; // 0 for root, or ID of parent class
         ServiceCurve real_time_sc;
         ServiceCurve link_share_sc;   // Optional, defaults to 0 if not specified
         ServiceCurve upper_limit_sc;  // Optional, defaults to 0 (no limit) if not specified
 
-        FlowConfig(core::FlowId flow_id, ServiceCurve rt_sc,
+        FlowConfig(core::FlowId flow_id, core::FlowId p_id, ServiceCurve rt_sc,
                    ServiceCurve ls_sc = {}, ServiceCurve ul_sc = {})
-            : id(flow_id), real_time_sc(rt_sc), link_share_sc(ls_sc), upper_limit_sc(ul_sc) {}
+            : id(flow_id), parent_id(p_id), real_time_sc(rt_sc), link_share_sc(ls_sc), upper_limit_sc(ul_sc) {}
     };
 
     /**
@@ -119,9 +122,12 @@ private:
     bool is_configured_ = false;
 
     // Placeholder for actual HFSC internal functions like:
-    // void update_flow_eligibility(HfscFlowState& flow_state, const PacketDescriptor& packet);
-    // void update_virtual_times(HfscFlowState& flow_state, const PacketDescriptor& packet);
+    // void update_flow_eligibility(HfscFlowState& flow_state, const PacketDescriptor& packet); // Old name
+    // void update_virtual_times(HfscFlowState& flow_state, const PacketDescriptor& packet); // Old name
     // HfscFlowState* select_next_flow_to_service();
+    uint64_t calculate_packet_service_time_us(uint32_t packet_length_bytes, const ServiceCurve& sc) const;
+    void update_flow_schedule(core::FlowId flow_id, bool is_newly_active);
+
 
     // Nested struct for managing eligible flows in the priority queue
     struct EligibleFlow {
