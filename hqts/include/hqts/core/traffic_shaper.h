@@ -1,15 +1,19 @@
 #ifndef HQTS_CORE_TRAFFIC_SHAPER_H_
 #define HQTS_CORE_TRAFFIC_SHAPER_H_
 
-#include "hqts/core/flow_context.h"        // For FlowContext, FlowTable, core::FlowId
+// #include "hqts/core/flow_context.h"        // REMOVED - Will be forward-declared
 #include "hqts/core/shaping_policy.h"      // Includes TokenBucket
 #include "hqts/policy/policy_tree.h"       // For PolicyTree
 #include "hqts/scheduler/packet_descriptor.h"// For PacketDescriptor
-#include "hqts/dataplane/flow_classifier.h"// For FlowClassifier
+#include "hqts/dataplane/flow_classifier.h"// For FlowClassifier (already forward-declares FlowTable)
 #include "hqts/dataplane/flow_identifier.h"// For FiveTuple
 
 #include <memory>
 #include <map>    // For potential scheduler_map_ if used later
+
+// Forward declaration for core::FlowTable
+// Note: flow_classifier.h might also forward-declare it. Redundant is okay.
+namespace hqts { namespace core { class FlowTable; } }
 
 namespace hqts {
 namespace core {

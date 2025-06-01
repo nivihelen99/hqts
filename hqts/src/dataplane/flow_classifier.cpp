@@ -1,4 +1,5 @@
 #include "hqts/dataplane/flow_classifier.h"
+#include "hqts/core/flow_context.h" // Ensure full definitions for FlowTable and FlowContext
 #include <stdexcept> // For std::runtime_error (though not used in current version)
 #include <string>    // For std::to_string (not used in current version)
 
