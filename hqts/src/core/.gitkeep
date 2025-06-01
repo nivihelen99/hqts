@@ -1,0 +1,3 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for source files implementing core HQTS functionalities.
+# Corresponding headers would be in include/hqts/core/

@@ -1,0 +1,3 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for source files related to management plane functionalities,
+# such as configuration management, CLI, or RPC interfaces for control.

@@ -1,0 +1,3 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for header files related to the scheduling components.
+# For example: scheduler.h, task_queue.h, resource_manager.h

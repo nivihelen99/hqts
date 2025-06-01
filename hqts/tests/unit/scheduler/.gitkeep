@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for unit tests for the scheduler components.
+# Test files should correspond to source files in src/scheduler/ and headers in include/hqts/scheduler/.
+# Example: test_scheduler.cpp, test_task_queue.cpp

@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for performance tests.
+# These tests will measure throughput, latency, resource usage, etc.
+# Example: test_high_load_performance.cpp, test_latency_under_stress.cpp

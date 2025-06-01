@@ -1,0 +1,3 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for utility code, test helpers, fixtures, or mock objects used in tests.
+# Example: mock_database.h, test_fixture_setup.cpp

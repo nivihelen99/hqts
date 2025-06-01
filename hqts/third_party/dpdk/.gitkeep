@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for the DPDK (Data Plane Development Kit) submodule or library.
+# Actual DPDK source code will be added here or linked as a submodule.
+# This directory will contain DPDK-related build files or custom patches if necessary.

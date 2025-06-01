@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for stress tests.
+# These tests will push the system to its limits to check stability and robustness.
+# Example: test_long_duration_stress.cpp, test_max_connections.cpp

@@ -1,0 +1,4 @@
+# This .gitkeep file ensures the directory is tracked by Git.
+# Placeholder for configuration templates (e.g., using Jinja2 or other templating engines).
+# These can be used to generate full configuration files from minimal inputs.
+# Example: base_hqts_config.json.j2, policy_template.yaml.tpl

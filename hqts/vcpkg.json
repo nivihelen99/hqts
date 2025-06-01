@@ -1,0 +1,9 @@
+{
+  "name": "hqts",
+  "version-string": "0.1.0",
+  "dependencies": [
+    // Add dependencies here, for example:
+    // "fmt",
+    // "spdlog"
+  ]
+}
