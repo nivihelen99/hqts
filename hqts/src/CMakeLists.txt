@@ -18,7 +18,7 @@ add_library(hqts_core STATIC
     # Main application logic (if main.cpp is part of the library)
     # If main.cpp is to be a separate executable, it should be in add_executable()
     # For now, assuming it might contain functions used by tests or other executables.
-    main.cpp
+    # main.cpp # Removed as it will be part of an executable target later
 )
 
 target_include_directories(hqts_core PUBLIC
