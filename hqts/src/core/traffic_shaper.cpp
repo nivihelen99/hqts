@@ -1,12 +1,15 @@
 #include "hqts/core/traffic_shaper.h"
+#include "hqts/dataplane/flow_classifier.h" // For FlowClassifier
+#include "hqts/dataplane/flow_identifier.h"// For FiveTuple
+#include "hqts/core/flow_context.h"        // For FlowTable, FlowContext
 #include <stdexcept> // For std::runtime_error
 #include <string>    // For std::to_string in error messages
 
 namespace hqts {
 namespace core {
 
-TrafficShaper::TrafficShaper(policy::PolicyTree& pt)
-    : policy_tree_(pt) {
+TrafficShaper::TrafficShaper(policy::PolicyTree& pt, dataplane::FlowClassifier& fc, core::FlowTable& ft)
+    : policy_tree_(pt), flow_classifier_(fc), flow_table_(ft) {
     // Constructor body
 }
 
@@ -37,36 +40,42 @@ scheduler::ConformanceLevel TrafficShaper::apply_token_buckets(
 }
 
 bool TrafficShaper::process_packet(
-    scheduler::PacketDescriptor& packet, // Packet is modified (conformance, priority)
-    const FlowContext& flow_context) {
+    scheduler::PacketDescriptor& packet, // Packet is modified (flow_id, conformance, priority)
+    const dataplane::FiveTuple& five_tuple) {
 
-    // Retrieve the policy for the flow.
-    // We need a non-const iterator to pass a non-const ShapingPolicy to the modifier lambda.
+    // 1. Classify and get FlowId, ensuring FlowContext exists
+    core::FlowId flow_id = flow_classifier_.get_or_create_flow(five_tuple);
+    packet.flow_id = flow_id; // Set the flow_id on the packet
+
+    // Retrieve the FlowContext
+    auto fc_it = flow_table_.find(flow_id);
+    if (fc_it == flow_table_.end()) {
+        // This should ideally not happen if get_or_create_flow ensures context creation.
+        throw std::runtime_error("TrafficShaper: FlowContext not found in table for flow_id: " + std::to_string(flow_id));
+    }
+    const core::FlowContext& flow_context = fc_it->second;
+
+    // 2. Retrieve ShapingPolicy for the flow using policy_id from FlowContext
     auto& policy_id_index = policy_tree_.get<policy::by_id>();
     auto policy_it = policy_id_index.find(flow_context.policy_id);
 
     if (policy_it == policy_id_index.end()) {
-        // Policy not found for this flow.
-        // As per plan, mark RED and let caller decide (or drop if default action).
-        // For current design, process_packet indicates drop by returning false.
         packet.conformance = scheduler::ConformanceLevel::RED;
-        // packet.priority could be set to a default "drop" priority or lowest if not dropping.
-        // For now, if no policy, it's an implicit drop by TrafficShaper.
-        // throw std::runtime_error("TrafficShaper: Policy not found for policy_id: " + std::to_string(flow_context.policy_id));
-        return false; // Indicate packet should be dropped
+        // Consider logging this event: Policy ID from FlowContext not found in PolicyTree.
+        return false; // Drop if policy referenced by flow context is not found
     }
 
-    // Variables to be set by the modifier lambda
+    // Variables to be set by the modifier lambda (which modifies policy's token buckets)
     scheduler::ConformanceLevel conformance_level;
     bool drop_this_packet = false;
 
     // Use policy_tree_.modify to get non-const access to the policy object
     // and update its token buckets.
     bool modified_successfully = policy_tree_.modify(policy_it,
-        [&](ShapingPolicy& modifiable_policy) {
+        [&](ShapingPolicy& modifiable_policy) { // modifiable_policy is non-const
 
-        conformance_level = this->apply_token_buckets(packet, modifiable_policy);
-        packet.conformance = conformance_level;
+        conformance_level = this->apply_token_buckets(packet, modifiable_policy); // packet is const here
+        packet.conformance = conformance_level; // Modify the packet passed by reference to process_packet
 
         if (conformance_level == scheduler::ConformanceLevel::RED && modifiable_policy.drop_on_red) {
             drop_this_packet = true;
@@ -76,25 +85,23 @@ bool TrafficShaper::process_packet(
             switch (conformance_level) {
                 case scheduler::ConformanceLevel::GREEN:
                     packet.priority = modifiable_policy.target_priority_green;
-                    // If PacketDescriptor had target_queue_id:
-                    // packet.target_queue_id = modifiable_policy.target_queue_id_green;
                     break;
                 case scheduler::ConformanceLevel::YELLOW:
                     packet.priority = modifiable_policy.target_priority_yellow;
-                    // packet.target_queue_id = modifiable_policy.target_queue_id_yellow;
                     break;
                 case scheduler::ConformanceLevel::RED: // Not dropped by policy.drop_on_red
                     packet.priority = modifiable_policy.target_priority_red;
-                    // packet.target_queue_id = modifiable_policy.target_queue_id_red;
                     break;
             }
         }
     });
 
     if (!modified_successfully) {
-        // This should ideally not happen if policy_it was valid.
-        // It might indicate an issue with the modify operation itself or concurrent modification.
-        throw std::runtime_error("TrafficShaper: Failed to modify policy tree for policy_id: " + std::to_string(flow_context.policy_id));
+        // This implies policy_it was invalid (e.g. points to end() or was erased concurrently),
+        // though the find() check above should prevent this for valid policy_id.
+        throw std::runtime_error("TrafficShaper: Failed to modify policy tree for policy_id: " +
+                                 std::to_string(flow_context.policy_id) +
+                                 ". Policy iterator may be invalid.");
     }
 
     return !drop_this_packet;
