@@ -194,20 +194,31 @@ TEST(StrictPrioritySchedulerAqmTest, AqmDropInSpecificQueue) {
     scheduler.enqueue(createTestPacket(104, 50, 1));
     // Packet 5 (50B): total=250. avg for next = 250. At max_thresh. p_b = 0.5. dp with count=?. (Assume one dropped, count reset)
     scheduler.enqueue(createTestPacket(105, 50, 1));
-    // Packet 6 (50B): total=300. avg for next = 300. At max_thresh. p_b = 0.5. dp.
+    // Packet 6 (50B): total=300 (current_total_bytes in RedAqmQueue for prio 1). Avg for next will be 300.
     scheduler.enqueue(createTestPacket(106, 50, 1));
-    // Packet 7 (10B): total=310 -> physical drop by RedAqmQueue (cap 300)
-    bool accepted_p7 = scheduler.enqueue(createTestPacket(107,10,1)); // This packet itself is not added to total_packets_
+
+    // Packet 7 (10B): current_total_bytes in RedAqmQueue for prio 1 is now 300 (6*50).
+    // This enqueue attempt will first check physical capacity (300 bytes).
+    // 300 + 10 > 300. So, RedAqmQueue::enqueue for this packet will return false.
+    // StrictPriorityScheduler::enqueue will not increment total_packets_ for it.
+    scheduler.enqueue(createTestPacket(107,10,1));
 
     size_t prio1_final_count = scheduler.get_queue_size(1);
-    // Expect some drops in Prio 1, so less than 6 packets (P7 is physical drop by AQM queue)
+    // Expect some RED drops among P1-P6, P7 is a physical drop by AQM's own capacity check.
+    // So, less than 6 packets should be in Prio 1.
     ASSERT_LT(prio1_final_count, 6);
     ASSERT_GT(prio1_final_count, 0); // But not all should be dropped if params are not extremely aggressive
+
+    // Verify total packets in scheduler
+    size_t total_packets_in_scheduler = scheduler.get_queue_size(0) + scheduler.get_queue_size(1) + scheduler.get_queue_size(2);
+    ASSERT_EQ(total_packets_in_scheduler, 1 + prio1_final_count + 1);
+
 
     // Dequeue and check order
     ASSERT_EQ(scheduler.dequeue().priority, 2); // Prio 2 first
     for(size_t i=0; i<prio1_final_count; ++i) {
-        ASSERT_EQ(scheduler.dequeue().priority, 1); // Then all from Prio 1
+        PacketDescriptor p = scheduler.dequeue();
+        ASSERT_EQ(p.priority, 1); // Then all from Prio 1
     }
     ASSERT_EQ(scheduler.dequeue().priority, 0); // Then Prio 0
     ASSERT_TRUE(scheduler.is_empty());
